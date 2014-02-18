@@ -92,11 +92,8 @@ __kernel void compute_gradient_orientation(
  *
  * @param DOGS: Pointer to global memory with ALL the coutiguously pre-allocated Differences of Gaussians
  * @param border_dist: integer, distance between inner image and borders (SIFT takes 5)
- * @param peak_thresh: float, threshold (SIFT takes 255.0 * 0.04 / 3.0)
  * @param output: Pointer to global memory output *filled with (-1,-1,-1,-1)* by default for invalid keypoints
  * @param octsize: initially 1 then twiced at each new octave
- * @param EdgeThresh0: initial upper limit of the curvatures ratio, to test if the point is on an edge
- * @param EdgeThresh: upper limit of the curvatures ratio, to test if the point is on an edge
  * @param counter: pointer to the current position in keypoints vector -- shared between threads
  * @param nb_keypoints: Maximum number of keypoints: size of the keypoints vector
  * @param scale: the scale in the DoG, i.e the index of the current DoG (this is not the std !)
@@ -120,10 +117,7 @@ __kernel void local_maxmin(
 	__global float* DOGS,
 	__global keypoint* output,
 	int border_dist,
-	float peak_thresh,
 	int octsize,
-	float EdgeThresh0,
-	float EdgeThresh,
 	__global int* counter,
 	int nb_keypoints,
 	int scale,
@@ -145,70 +139,51 @@ __kernel void local_maxmin(
 		float res = 0.0f;
 		float val = DOGS[index_dog + gid0 + width*gid1];
 
-		/*
-		The following condition is part of the keypoints refinement: we eliminate the low-contrast points
-		NOTE: "fabsf" instead of "fabs" should be used, for "fabs" if for doubles. Used "fabs" to be coherent with python
-		*/
-		if (fabs(val) > (0.8 * peak_thresh)) {
-
-			int c,r,pos;
-			int ismax = 0, ismin = 0;
-			if (val > 0.0) ismax = 1;
-			else ismin = 1;
-			for (r = gid1  - 1; r <= gid1 + 1; r++) {
-				for (c = gid0 - 1; c <= gid0 + 1; c++) {
-				
-					pos = r*width + c;
-					if (ismax == 1) //if (val > 0.0)
-						if (DOGS[index_dog_prev+pos] > val || DOGS[index_dog+pos] > val || DOGS[index_dog_next+pos] > val) ismax = 0;
-					if (ismin == 1) //else
-						if (DOGS[index_dog_prev+pos] < val || DOGS[index_dog+pos] < val || DOGS[index_dog_next+pos] < val) ismin = 0;
-				}
+		int c,r,pos;
+		int ismax = 0, ismin = 0;
+		if (val > 0.0) ismax = 1;
+		//else ismin = 1;
+		for (r = gid1  - 1; r <= gid1 + 1; r++) {
+			for (c = gid0 - 1; c <= gid0 + 1; c++) {
+			
+				pos = r*width + c;
+				if (ismax == 1) //if (val > 0.0)
+					if (DOGS[index_dog_prev+pos] > val || DOGS[index_dog+pos] > val || DOGS[index_dog_next+pos] > val) ismax = 0;
+//				if (ismin == 1) //else
+	//				if (DOGS[index_dog_prev+pos] < val || DOGS[index_dog+pos] < val || DOGS[index_dog_next+pos] < val) ismin = 0;
 			}
-
+		}
 			if (ismax == 1 || ismin == 1) res = val;
-
+			
+			
 			/*
-			 At this point, we know if "val" is a local extremum or not
-			 We have to test if this value lies on an edge (keypoints refinement)
-			  This is done by testing the ratio of the principal curvatures, given by the product and the sum of the
-			   Hessian eigenvalues
-			*/
+		 At this point, we know if "val" is a local extremum or not
+		 We have to test if this value lies on an edge (keypoints refinement)
+		 This is done by testing the ratio of the principal curvatures, given by the product and the sum of the
+		 Hessian eigenvalues
+		*/
+		
+		
+		pos = gid1*width+gid0;
+		float H00 = DOGS[index_dog+(gid1-1)*width+gid0] - 2.0 * DOGS[index_dog+pos] + DOGS[index_dog+(gid1+1)*width+gid0],
+		H11 = DOGS[index_dog+pos-1] - 2.0 * DOGS[index_dog+pos] + DOGS[index_dog+pos+1],
+		H01 = ( (DOGS[index_dog+(gid1+1)*width+gid0+1]
+				- DOGS[index_dog+(gid1+1)*width+gid0-1])
+				- (DOGS[index_dog+(gid1-1)*width+gid0+1] - DOGS[index_dog+(gid1-1)*width+gid0-1])) / 4.0;
 
-			pos = gid1*width+gid0;
+		float det = H00 * H11 - H01 * H01, trace = H00 + H11;
 
-			float H00 = DOGS[index_dog+(gid1-1)*width+gid0] - 2.0 * DOGS[index_dog+pos] + DOGS[index_dog+(gid1+1)*width+gid0],
-			H11 = DOGS[index_dog+pos-1] - 2.0 * DOGS[index_dog+pos] + DOGS[index_dog+pos+1],
-			H01 = ( (DOGS[index_dog+(gid1+1)*width+gid0+1]
-					- DOGS[index_dog+(gid1+1)*width+gid0-1])
-					- (DOGS[index_dog+(gid1-1)*width+gid0+1] - DOGS[index_dog+(gid1-1)*width+gid0-1])) / 4.0;
 
-			float det = H00 * H11 - H01 * H01, trace = H00 + H11;
+		if (res != 0.0f) {
+			int old = atomic_inc(counter);
+			keypoint k = 0.0; //no malloc, for this is a float4
+			k.s0 = val;
+			k.s1 = (float) gid1;
+			k.s2 = (float) gid0;
+			k.s3 = (float) scale;
+			if (old < nb_keypoints) output[old]=k;
+		}
 
-			/*
-			   If (trace^2)/det < thresh, the Keypoint is OK.
-			   Note that the following "EdgeThresh" seem to be the inverse of the ratio upper limit
-			*/
-
-			float edthresh = (octsize <= 1 ? EdgeThresh0 : EdgeThresh);
-
-			if (det < edthresh * trace * trace)
-				res = 0.0f;
-
-			/*
-			 At this stage, res != 0.0f iff the current pixel is a good keypoint
-			*/
-			if (res != 0.0f) {
-				int old = atomic_inc(counter);
-				keypoint k = 0.0; //no malloc, for this is a float4
-				k.s0 = val;
-				k.s1 = (float) gid1;
-				k.s2 = (float) gid0;
-				k.s3 = (float) scale;
-				if (old < nb_keypoints) output[old]=k;
-			}
-
-		}//end "value >thresh"
 	}//end "in the inner image"
 }
 
@@ -225,7 +200,6 @@ __kernel void local_maxmin(
  * @param DOGS: Pointer to global memory with ALL the coutiguously pre-allocated Differences of Gaussians
  * @param keypoints: Pointer to global memory with current keypoints vector. It will be modified with the interpolated points
  * @param actual_nb_keypoints: actual number of keypoints previously found, i.e previous "counter" final value
- * @param peak_thresh: we are not counting the interpolated values if below the threshold (par.PeakThresh = 255.0*0.04/3.0)
  * @param InitSigma: float "par.InitSigma" in SIFT (1.6 by default)
  * @param width: integer number of columns of the DoG
  * @param height: integer number of lines of the DoG
@@ -237,8 +211,8 @@ __kernel void interp_keypoint(
 	__global keypoint* keypoints,
 	int start_keypoints,
 	int end_keypoints,
-	float peak_thresh,
 	float InitSigma,
+	int Scales,
 	int width,
 	int height)
 {
@@ -321,7 +295,8 @@ __kernel void interp_keypoint(
 				peakval = DOGS[index_dog+pos] + 0.5f * (solution0*g0+solution1*g1+solution2*g2);
 
 
-			/* Move to an adjacent (row,col) location if quadratic interpolation is larger than 0.6 units in some direction. 				The movesRemain counter allows only a fixed number of moves to prevent possibility of infinite loops.
+			/* Move to an adjacent (row,col) location if quadratic interpolation is larger than 0.6 units in some direction. 				
+			The movesRemain counter allows only a fixed number of moves to prevent possibility of infinite loops.
 			*/
 
 				if (solution1 > 0.6f && newr < height - 3)
@@ -344,15 +319,14 @@ __kernel void interp_keypoint(
 			}//end of the "keypoints interpolation" big loop
 
 
-			/* Do not create a keypoint if interpolation still remains far outside expected limits,
-				or if magnitude of peak value is below threshold (i.e., contrast is too low).
-			*/
+
 			keypoint ki = 0.0f; //float4
-			if (fabs(solution0) <= 1.5f && fabs(solution1) <= 1.5f && fabs(solution2) <= 1.5f && fabs(peakval) >= peak_thresh) {
-				ki.s0 = peakval;
+
+			if (fabs(solution0) <= 1.5f && fabs(solution1) <= 1.5f && fabs(solution2) <= 1.5f) {
+				ki.s3 = peakval;
 				ki.s1 = /*k.s1*/ r + solution1;
-				ki.s2 = /*k.s2*/ c + solution2;
-				ki.s3 = InitSigma * pow(2.0f, (((float) scale) + solution0) / 3.0f); //3.0 is "par.Scales"
+				ki.s0 = /*k.s2*/ c + solution2;
+				ki.s2 = InitSigma * pow(2.0f, (((float) scale) + solution0) / (float) Scales); //3.0 is "par.Scales"
 			}
 			else { //the keypoint was not correctly interpolated : we reject it
 				ki.s0 = -1.0f; ki.s1 = -1.0f; ki.s2 = -1.0f; ki.s3 = -1.0f;

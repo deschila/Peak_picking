@@ -66,7 +66,7 @@ class DemoSift(object):
         if filename and os.path.exists(filename):
             self.filename = filename
         else:
-            self.filename = utilstest.UtilsTest.getimage("wikipedia/commons/9/94/Esrf_grenoble.jpg")
+            self.filename = "LaB6_0003.mar3450"
         try:
             self.image_rgb = scipy.misc.imread(self.filename)
         except:
@@ -82,12 +82,12 @@ class DemoSift(object):
         self.kp_cpp = numpy.empty(0)
         self.kp_ocl = numpy.empty(0)
         self.fig = pylab.figure()
-        self.sp1 = self.fig.add_subplot(1, 2, 1)
-        self.im1 = self.sp1.imshow(self.image_rgb)
+        self.sp1 = self.fig.add_subplot(1, 1, 1)
+        self.im1 = self.sp1.imshow(numpy.log(self.image_rgb))
         self.sp1.set_title("OpenCL: %s keypoint" % self.kp_ocl.size)
-        self.sp2 = self.fig.add_subplot(1, 2, 2)
-        self.im2 = self.sp2.imshow(self.image_bw, cmap="gray")
-        self.sp2.set_title("C++: %s keypoint" % self.kp_cpp.size)
+        #self.sp2 = self.fig.add_subplot(1, 2, 2)
+        #self.im2 = self.sp2.imshow(self.image_bw, cmap="gray")
+        #self.sp2.set_title("C++: %s keypoint" % self.kp_cpp.size)
         self.fig.show()
         self.timing_cpp = None
         self.timing_ocl = None
@@ -102,7 +102,7 @@ class DemoSift(object):
             return #we are using an old kind of Sift-C++
         self.sp2.set_title("C++: %s keypoint" % self.kp_cpp.size)
         self.fig.canvas.draw()
-        self.kp_cpp.sort(order=["scale", "angle", "x", "y"])
+#        self.kp_cpp.sort(order=["scale", "angle", "x", "y"])
 
     def sift_ocl(self):
         print(os.linesep + "Running SIFT using OpenCL code")
@@ -112,42 +112,29 @@ class DemoSift(object):
         self.timing_ocl = t1 - t0
         self.sp1.set_title("OpenCL: %s keypoint" % self.kp_ocl.size)
         self.fig.canvas.draw()
-        self.kp_ocl.sort(order=["scale", "angle", "x", "y"])
+#        self.kp_ocl.sort(order=["scale", "angle", "x", "y"])
 
     def timings(self):
         if self.kp_ocl.size > 0 and self.kp_cpp > 0:
             print("Computing time using C++: %.3fms\t using OpenCL: %.3fms:\t Speed up: %.3f" % (1e3 * self.timing_cpp, 1e3 * self.timing_ocl, self.timing_cpp / self.timing_ocl))
 
-    def show(self, max=1000):
-        if max == None:
-            max = sys.maxint
-        if self.kp_cpp.size > max:
-            print("keeping only the %i largest keypoints for display" % max)
-        todo = min(self.kp_cpp.size, max)
+    def show(self, max_kp=None):
+        self.sp1.plot(self.kp_ocl.x[-50:], self.kp_ocl.y[-50:], "or")
+#        if max_kp == None:
+#            max_kp = sys.maxint
+#        if self.kp_cpp.size > max_kp:
+#            print("keeping only the %i largest keypoints for display" % max_kp)
 
-        for i in range(self.kp_cpp.size - todo, self.kp_cpp.size):
-            x = self.kp_cpp[i].x
-            y = self.kp_cpp[i].y
-            scale = self.kp_cpp[i].scale
-            angle = self.kp_cpp[i].angle
-            x0 = x + scale * cos(angle)
-            y0 = y + scale * sin(angle)
-            self.sp2.annotate("", xy=(x, y), xytext=(x0, y0), color="red",
-                             arrowprops=dict(facecolor='red', edgecolor='red', width=1),)
-            self.sp1.annotate("", xy=(x, y), xytext=(x0, y0), color="red",
-                             arrowprops=dict(facecolor='red', edgecolor='red', width=1),)
-        self.fig.canvas.draw()
-
-        todo = min(self.kp_ocl.size, max)
-        for i in range(self.kp_ocl.size - todo, self.kp_ocl.size):
-            x = self.kp_ocl[i].x
-            y = self.kp_ocl[i].y
-            scale = self.kp_ocl[i].scale
-            angle = self.kp_ocl[i].angle
-            x0 = x + scale * cos(angle)
-            y0 = y + scale * sin(angle)
-            self.sp1.annotate("", xy=(x, y), xytext=(x0, y0), color="blue",
-                             arrowprops=dict(facecolor='blue', edgecolor='blue', width=1),)
+#        todo = min(self.kp_ocl.size, max_kp)
+#        for i in range(self.kp_ocl.size - todo, self.kp_ocl.size):
+#            x = self.kp_ocl[i].x
+#            y = self.kp_ocl[i].y
+#            scale = self.kp_ocl[i].scale
+#            angle = self.kp_ocl[i].angle
+#            x0 = x + scale * cos(angle)
+#            y0 = y + scale * sin(angle)
+#            self.sp1.annotate("", xy=(x, y), xytext=(x0, y0), color="blue",
+#                             arrowprops=dict(facecolor='blue', edgecolor='blue', width=1),)
         self.fig.canvas.draw()
 
     def match(self):
@@ -202,11 +189,11 @@ if __name__ == "__main__":
         print("Processing file demo image")
         d = DemoSift(context=utilstest.ctx, profile=options.info)
         d.sift_ocl()
-        if feature:
-            d.sift_cpp()
-        d.timings()
-        d.show(1000)
-        d.match()
+#        if feature:
+#            d.sift_cpp()
+#        d.timings()
+        d.show()
+#        d.match()
         if options.info:
             d._sift_ocl.log_profile()
         raw_input()
