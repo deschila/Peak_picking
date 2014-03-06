@@ -85,52 +85,52 @@ class UtilsTest(object):
     test_home = os.path.dirname(os.path.abspath(__file__))
     sem = threading.Semaphore()
     recompiled = False
-    name = "sift"
+    name = "peak_picking"
     image_home = os.path.join(test_home, "testimages")
     if not os.path.isdir(image_home):
         os.makedirs(image_home)
     platform = distutils.util.get_platform()
     architecture = "lib.%s-%i.%i" % (platform,
                                     sys.version_info[0], sys.version_info[1])
-    sift_home = os.path.join(os.path.dirname(test_home),
+    pkg_home = os.path.join(os.path.dirname(test_home),
                                         "build", architecture)
-    logger.info("sift Home is: " + sift_home)
+    logger.info("sift Home is: " + pkg_home)
     if "sift" in sys.modules:
-        logger.info("sift module was already loaded from  %s" % sys.modules["sift"])
-        sift = None
-        sys.modules.pop("sift")
+        logger.info("peak_picking module was already loaded from  %s" % sys.modules[name])
+        peak_picking = None
+        sys.modules.pop(name)
 
-    if not os.path.isdir(sift_home):
+    if not os.path.isdir(pkg_home):
         with sem:
-            if not os.path.isdir(sift_home):
-                logger.warning("Building sift to %s" % sift_home)
+            if not os.path.isdir(pkg_home):
+                logger.warning("Building sift to %s" % pkg_home)
                 p = subprocess.Popen([sys.executable, "setup.py", "build"],
                                  shell=False, cwd=os.path.dirname(test_home))
                 logger.info("subprocess ended with rc= %s" % p.wait())
                 recompiled = True
     opencl = os.path.join(os.path.dirname(test_home), "openCL")
     for clf in os.listdir(opencl):
-        if clf.endswith(".cl") and clf not in os.listdir(os.path.join(sift_home, "sift")):
-            copy(os.path.join(opencl, clf), os.path.join(sift_home, "sift", clf))
-    sift = imp.load_module(*((name,) + imp.find_module(name, [sift_home])))
-    sys.modules[name] = sift
-    logger.info("sift loaded from %s" % sift.__file__)
+        if clf.endswith(".cl") and clf not in os.listdir(os.path.join(pkg_home, name)):
+            copy(os.path.join(opencl, clf), os.path.join(pkg_home, name, clf))
+    peak_picking = imp.load_module(*((name,) + imp.find_module(name, [pkg_home])))
+    sys.modules[name] = peak_picking
+    logger.info("sift loaded from %s" % peak_picking.__file__)
 
     @classmethod
     def deep_reload(cls):
         logger.info("Loading sift")
-        cls.sift = None
-        sift = None
-        sys.path.insert(0, cls.sift_home)
+        cls.peak_picking = None
+        peak_picking = None
+        sys.path.insert(0, cls.pkg_home)
         for key in sys.modules.copy():
-            if key.startswith("sift"):
+            if key.startswith(cls.name):
                 sys.modules.pop(key)
 
-        import sift
-        cls.sift = sift
-        logger.info("sift loaded from %s" % sift.__file__)
-        sys.modules[cls.name] = sift
-        return cls.sift
+        import peak_picking
+        cls.peak_picking = peak_picking
+        logger.info("sift loaded from %s" % peak_picking.__file__)
+        sys.modules[cls.name] = peak_picking
+        return cls.peak_picking
 
     @classmethod
     def forceBuild(cls, remove_first=True):
@@ -140,21 +140,21 @@ class UtilsTest(object):
         if not cls.recompiled:
             with cls.sem:
                 if not cls.recompiled:
-                    logger.info("Building sift to %s" % cls.sift_home)
-                    if "sift" in sys.modules:
-                        logger.info("sift module was already loaded from  %s" % sys.modules["sift"])
-                        cls.sift = None
-                        sys.modules.pop("sift")
+                    logger.info("Building sift to %s" % cls.pkg_home)
+                    if cls.name in sys.modules:
+                        logger.info("sift module was already loaded from  %s" % sys.modules[cls.name])
+                        cls.peak_picking = None
+                        sys.modules.pop(cls.name)
                     if remove_first:
-                        recursive_delete(cls.sift_home)
+                        recursive_delete(cls.pkg_home)
                     p = subprocess.Popen([sys.executable, "setup.py", "build"],
                                      shell=False, cwd=os.path.dirname(cls.test_home))
                     logger.info("subprocess ended with rc= %s" % p.wait())
                     opencl = os.path.join(os.path.dirname(cls.test_home), "openCL")
                     for clf in os.listdir(opencl):
-                        if clf.endswith(".cl") and clf not in os.listdir(os.path.join(cls.sift_home, "sift")):
-                            copy(os.path.join(opencl, clf), os.path.join(cls.sift_home, "sift", clf))
-                    cls.sift = cls.deep_reload()
+                        if clf.endswith(".cl") and clf not in os.listdir(os.path.join(cls.pkg_home, cls.name)):
+                            copy(os.path.join(opencl, clf), os.path.join(cls.pkg_home, cls.name, clf))
+                    cls.peak_picking = cls.deep_reload()
                     cls.recompiled = True
 
 
@@ -276,8 +276,8 @@ def getLogger(filename=__file__):
 # This is very specific to PyOpenCL
 ################################################################################
 
-import sift
-from sift.opencl import ocl
+import peak_picking
+from peak_picking.opencl import ocl
 #This is the shared context for all tests:
 if "," in options.device: #Form 0,1
     platform, device = options.device.split(",", 1)

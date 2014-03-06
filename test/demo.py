@@ -38,7 +38,7 @@ import sys, os, pyopencl, time
 from math import sin, cos
 import utilstest
 logger = utilstest.getLogger(__file__)
-import sift
+import peak_picking
 import numpy
 import scipy.misc
 import pylab
@@ -67,6 +67,8 @@ class DemoSift(object):
             self.filename = filename
         else:
             self.filename = "LaB6_0003.mar3450"
+#             self.filename = utilstest.UtilsTest.getimage("wikipedia/commons/9/94/Esrf_grenoble.jpg")
+
         try:
             self.image_rgb = scipy.misc.imread(self.filename)
         except:
@@ -77,13 +79,15 @@ class DemoSift(object):
         else: self.image_bw = self.image_rgb
         if feature:
             self._sift_cpp = feature.SiftAlignment()
-        self._sift_ocl = sift.SiftPlan(template=self.image_rgb, device=device, devicetype=devicetype, context=context, profile=profile)
+        self._sift_ocl = peak_picking.SiftPlan(template=self.image_rgb, device=device, devicetype=devicetype, context=context, profile=profile)
+        print self._sift_ocl
+        print peak_picking
         self.ctx = self._sift_ocl.ctx
         self.kp_cpp = numpy.empty(0)
         self.kp_ocl = numpy.empty(0)
         self.fig = pylab.figure()
         self.sp1 = self.fig.add_subplot(1, 1, 1)
-        self.im1 = self.sp1.imshow(numpy.log(self.image_rgb))
+        self.im1 = self.sp1.imshow(numpy.log1p(self.image_rgb))
         self.sp1.set_title("OpenCL: %s keypoint" % self.kp_ocl.size)
         #self.sp2 = self.fig.add_subplot(1, 2, 2)
         #self.im2 = self.sp2.imshow(self.image_bw, cmap="gray")
@@ -119,7 +123,9 @@ class DemoSift(object):
             print("Computing time using C++: %.3fms\t using OpenCL: %.3fms:\t Speed up: %.3f" % (1e3 * self.timing_cpp, 1e3 * self.timing_ocl, self.timing_cpp / self.timing_ocl))
 
     def show(self, max_kp=None):
-        self.sp1.plot(self.kp_ocl.x[-50:], self.kp_ocl.y[-50:], "or")
+#         for x,y in zip(self.kp_ocl.x[:max_kp],self.kp_ocl.y[:max_kp]):
+#             print x,y
+        self.sp1.plot(self.kp_ocl.x[:max_kp], self.kp_ocl.y[:max_kp], "or")
 #        if max_kp == None:
 #            max_kp = sys.maxint
 #        if self.kp_cpp.size > max_kp:
@@ -180,14 +186,14 @@ if __name__ == "__main__":
                 if feature:
                     d.sift_cpp()
                 d.timings()
-                d.show(1000)
+                d.show(100)
                 d.match()
                 if options.info:
                     d._sift_ocl.log_profile()
                 raw_input()
     else:
         print("Processing file demo image")
-        d = DemoSift(context=utilstest.ctx, profile=options.info)
+        d = DemoSift(devicetype="CPU",profile=options.info,)#context=utilstest.ctx, )
         d.sift_ocl()
 #        if feature:
 #            d.sift_cpp()

@@ -250,7 +250,7 @@ if sphinx:
             sys.path.pop(0)
     cmdclass['build_doc'] = build_doc
 
-setup(name='sift',
+setup(name='peak_picking',
       version=version,
       author="Pierre Paleo, Jérôme Kieffer",
       author_email="jerome.kieffer@esrf.fr",
@@ -260,8 +260,8 @@ setup(name='sift',
       scripts=script_files,
 #      ext_package="sift",
 #      ext_modules=[Extension(**dico) for dico in ext_modules],
-      packages=["sift"],
-      package_dir={"sift": "sift-src" },
+      packages=["peak_picking"],
+      package_dir={"peak_picking": "sift-src" },
       test_suite="test",
       cmdclass=cmdclass,
       data_files=data_files

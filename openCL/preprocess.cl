@@ -99,13 +99,13 @@ u16_to_float(__global unsigned short  *array_int,
 /**
  * \brief cast values of an array of uint32 into a float output array.
  *
- * @param array_int:    Pointer to global memory with the input data as unsigned16 array
+ * @param array_int:    Pointer to global memory with the input data as unsigned32 array
  * @param array_float:  Pointer to global memory with the output data as float array
  * @param IMAGE_W:        Width of the image
  * @param IMAGE_H:         Height of the image
  */
 __kernel void
-u32_to_float(__global unsigned short  *array_int,
+u32_to_float(__global unsigned int  *array_int,
              __global float *array_float,
              const int IMAGE_W,
              const int IMAGE_H

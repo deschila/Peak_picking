@@ -140,20 +140,19 @@ __kernel void local_maxmin(
 		float val = DOGS[index_dog + gid0 + width*gid1];
 
 		int c,r,pos;
-		int ismax = 0, ismin = 0;
-		if (val > 0.0) ismax = 1;
-		//else ismin = 1;
+		int ismax = 0;
+		if (val < 0.0) 
+			return;
+		else
+			ismax = 1;
 		for (r = gid1  - 1; r <= gid1 + 1; r++) {
-			for (c = gid0 - 1; c <= gid0 + 1; c++) {
-			
+			for (c = gid0 - 1; c <= gid0 + 1; c++) {			
 				pos = r*width + c;
-				if (ismax == 1) //if (val > 0.0)
+				if (ismax == 1)
 					if (DOGS[index_dog_prev+pos] > val || DOGS[index_dog+pos] > val || DOGS[index_dog_next+pos] > val) ismax = 0;
-//				if (ismin == 1) //else
-	//				if (DOGS[index_dog_prev+pos] < val || DOGS[index_dog+pos] < val || DOGS[index_dog_next+pos] < val) ismin = 0;
 			}
 		}
-			if (ismax == 1 || ismin == 1) res = val;
+		if (ismax == 1) res = val;
 			
 			
 			/*
@@ -163,6 +162,7 @@ __kernel void local_maxmin(
 		 Hessian eigenvalues
 		*/
 		
+
 		
 		pos = gid1*width+gid0;
 		float H00 = DOGS[index_dog+(gid1-1)*width+gid0] - 2.0 * DOGS[index_dog+pos] + DOGS[index_dog+(gid1+1)*width+gid0],
@@ -174,13 +174,14 @@ __kernel void local_maxmin(
 		float det = H00 * H11 - H01 * H01, trace = H00 + H11;
 
 
+
 		if (res != 0.0f) {
 			int old = atomic_inc(counter);
 			keypoint k = 0.0; //no malloc, for this is a float4
-			k.s0 = val;
-			k.s1 = (float) gid1;
-			k.s2 = (float) gid0;
-			k.s3 = (float) scale;
+			k.s0 = (float) gid0*octsize; //x
+			k.s1 = (float) gid1*octsize; //y
+			k.s2 = (float) scale*octsize;//s
+			k.s3 = val;
 			if (old < nb_keypoints) output[old]=k;
 		}
 
@@ -319,7 +320,7 @@ __kernel void interp_keypoint(
 			}//end of the "keypoints interpolation" big loop
 
 
-
+			printf("i");
 			keypoint ki = 0.0f; //float4
 
 			if (fabs(solution0) <= 1.5f && fabs(solution1) <= 1.5f && fabs(solution2) <= 1.5f) {
