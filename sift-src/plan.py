@@ -640,20 +640,20 @@ class SiftPlan(object):
 #             kp_counter = self.cnt[0]
             # TODO: modify interp_keypoint so that it reads end_keypoint from GPU memory
 
-            evt = self.programs["image"].interp_keypoint(self.queue, procsize, wgsize,
-                                          self.buffers["DoGs"].data,        # __global float* DOGS,
-                                          self.buffers["Kp_1"].data,        # __global keypoint* keypoints,
-                                          last_start,                       # int start_keypoint,
-                                          self.cnt[0],                      # int end_keypoint,
-                                          numpy.float32(self._init_sigma),     # float InitSigma,
-                                          numpy.int32(par.Scales),          #int Scales
-                                          *self.scales[octave])             # int width, int height)
-            if self.profile:
-                self.events += [("get cnt", cp_evt),
-                                ("interp_keypoint %s %s" % (octave, scale), evt)
-                                ]
-  
-                self.debug_holes("After interp_keypoint %s %s" % (octave, scale))
+#             evt = self.programs["image"].interp_keypoint(self.queue, procsize, wgsize,
+#                                           self.buffers["DoGs"].data,        # __global float* DOGS,
+#                                           self.buffers["Kp_1"].data,        # __global keypoint* keypoints,
+#                                           last_start,                       # int start_keypoint,
+#                                           self.cnt[0],                      # int end_keypoint,
+#                                           numpy.float32(self._init_sigma),     # float InitSigma,
+#                                           numpy.int32(par.Scales),          #int Scales
+#                                           *self.scales[octave])             # int width, int height)
+#             if self.profile:
+#                 self.events += [("get cnt", cp_evt),
+#                                 ("interp_keypoint %s %s" % (octave, scale), evt)
+#                                 ]
+#   
+#                 self.debug_holes("After interp_keypoint %s %s" % (octave, scale))
             newcnt = self._compact()        
             print("octave %i scale %i kp %i"%(octave, scale, newcnt))
             if newcnt:
