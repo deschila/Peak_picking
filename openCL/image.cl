@@ -178,12 +178,23 @@ __kernel void local_maxmin(
 		if (res != 0.0f) {
 			int old = atomic_inc(counter);
 			keypoint k = 0.0; //no malloc, for this is a float4
-			k.s0 = (float) gid0*octsize; //x
-			k.s1 = (float) gid1*octsize; //y
-			k.s2 = (float) scale*octsize;//s
-			k.s3 = val;
+			k.s0 = val;
+			k.s1 = (float) gid1;
+			k.s2 = (float) gid0;
+			k.s3 = (float) scale;
 			if (old < nb_keypoints) output[old]=k;
 		}
+		
+		//			Cas sans interp keypoints
+		//		if (res != 0.0f) {
+		//			int old = atomic_inc(counter);
+		//			keypoint k = 0.0; //no malloc, for this is a float4
+		//			k.s0 = (float) gid0*octsize; //x
+		//			k.s1 = (float) gid1*octsize; //y
+		//			k.s2 = (float) scale*octsize;//s
+		//			k.s3 = val;
+		//			if (old < nb_keypoints) output[old]=k;
+		//		}
 
 	}//end "in the inner image"
 }
@@ -213,6 +224,7 @@ __kernel void interp_keypoint(
 	int start_keypoints,
 	int end_keypoints,
 	float InitSigma,
+	float FinalSigma,
 	int Scales,
 	int width,
 	int height)
@@ -228,7 +240,7 @@ __kernel void interp_keypoint(
 		int scale = (int) k.s3;
 		if (r != -1) {
 			int index_dog_prev = (scale-1)*(width*height);
-			int index_dog =scale*(width*height);
+			int index_dog = scale *( width*height);
 			int index_dog_next =(scale+1)*(width*height);
 
 			//pre-allocating variables before entering into the loop
@@ -237,7 +249,7 @@ __kernel void interp_keypoint(
 				K00, K11, K22, K01, K02, K12, K10, K20, K21,
 				solution0, solution1, solution2, det, peakval;
 			int pos = r*width+c;
-			int loop = 1, movesRemain = 5;
+			int loop = 1, movesRemain = 1;
 			int newr = r, newc = c;
 
 			//this loop replaces the recursive "InterpKeyPoint"
@@ -320,14 +332,14 @@ __kernel void interp_keypoint(
 			}//end of the "keypoints interpolation" big loop
 
 
-			printf("i");
+
 			keypoint ki = 0.0f; //float4
 
 			if (fabs(solution0) <= 1.5f && fabs(solution1) <= 1.5f && fabs(solution2) <= 1.5f) {
 				ki.s3 = peakval;
 				ki.s1 = /*k.s1*/ r + solution1;
 				ki.s0 = /*k.s2*/ c + solution2;
-				ki.s2 = InitSigma * pow(2.0f, (((float) scale) + solution0) / (float) Scales); //3.0 is "par.Scales"
+				ki.s2 = InitSigma * pow(FinalSigma/InitSigma, (((float) scale) + solution0) / (float) Scales); //3.0 is "par.Scales"
 			}
 			else { //the keypoint was not correctly interpolated : we reject it
 				ki.s0 = -1.0f; ki.s1 = -1.0f; ki.s2 = -1.0f; ki.s3 = -1.0f;

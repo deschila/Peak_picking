@@ -56,6 +56,7 @@ import time, math, os, logging, threading, sys
 # import sys
 import gc
 import numpy
+import pylab
 from .param import par
 from .opencl import ocl, pyopencl
 
@@ -321,14 +322,14 @@ class SiftPlan(object):
             self._init_gaussian(sigma)
         prevSigma = self._init_sigma
 
-        for i in range(par.Scales+2):
+        for i in range(par.Scales+3):
             if i == 0 : 
                 absSigma = self._init_sigma
                 increase = self._init_sigma
             else :
                 absSigma = self._init_sigma * self.sigmaRatio ** (1.0*i/(par.Scales))
                 increase = prevSigma * math.sqrt(self.sigmaRatio ** (2.0/(par.Scales)) - 1.0)
-            print (absSigma, increase, prevSigma)
+#             print (absSigma, increase, prevSigma)
             self._init_gaussian(increase)
             prevSigma = absSigma
             
@@ -531,6 +532,7 @@ class SiftPlan(object):
                     for k in kp:
                         total_size += k.shape[0]
                 logger.info("in octave %i found %i kp" % (octave, total_size))
+                
             ########################################################################
             # Merge keypoints in central memory
             ########################################################################
@@ -582,6 +584,8 @@ class SiftPlan(object):
         @param octave: number of the octave
         """
         results=[]
+        x=[]
+        y=[]
         prevSigma = self._init_sigma
         logger.info("Calculating octave %i" % octave)
         wgsize = (128,)  # (max(self.wgsize[octave]),) #TODO: optimize
@@ -612,7 +616,7 @@ class SiftPlan(object):
                                              *self.scales[octave])
             if self.profile:self.events.append(("DoG %s %s" % (octave, scale), evt))
         self.debug.append(self.buffers["DoGs"].get())
-        for scale in range(1, par.Scales + 1):
+        for scale in range(1, par.Scales+1 ):
 #                print("Before local_maxmin, cnt is %s %s %s" % (self.buffers["cnt"].get()[0], self.procsize[octave], self.wgsize[octave]))
             evt = self.programs["image"].local_maxmin(self.queue, self.procsize[octave], self.wgsize[octave],
                                             self.buffers["DoGs"].data,      # __global float* DOGS,
@@ -639,23 +643,30 @@ class SiftPlan(object):
             
 #             kp_counter = self.cnt[0]
             # TODO: modify interp_keypoint so that it reads end_keypoint from GPU memory
-
-#             evt = self.programs["image"].interp_keypoint(self.queue, procsize, wgsize,
-#                                           self.buffers["DoGs"].data,        # __global float* DOGS,
-#                                           self.buffers["Kp_1"].data,        # __global keypoint* keypoints,
-#                                           last_start,                       # int start_keypoint,
-#                                           self.cnt[0],                      # int end_keypoint,
-#                                           numpy.float32(self._init_sigma),     # float InitSigma,
-#                                           numpy.int32(par.Scales),          #int Scales
-#                                           *self.scales[octave])             # int width, int height)
-#             if self.profile:
-#                 self.events += [("get cnt", cp_evt),
-#                                 ("interp_keypoint %s %s" % (octave, scale), evt)
-#                                 ]
-#   
-#                 self.debug_holes("After interp_keypoint %s %s" % (octave, scale))
+            
+            evt = self.programs["image"].interp_keypoint(self.queue, procsize, wgsize,
+                                          self.buffers["DoGs"].data,        # __global float* DOGS,
+                                          self.buffers["Kp_1"].data,        # __global keypoint* keypoints,
+                                          last_start,                       # int start_keypoint,
+                                          self.cnt[0],                      # int end_keypoint,
+                                          numpy.float32(self._init_sigma),     # float InitSigma,
+                                          numpy.float32(par.FinalSigma),    # float FinalSigma
+                                          numpy.int32(par.Scales),          #int Scales
+                                          *self.scales[octave])             # int width, int height)
+            if self.profile:
+                self.events += [("get cnt", cp_evt),
+                                ("interp_keypoint %s %s" % (octave, scale), evt)
+                                ]
+     
+                self.debug_holes("After interp_keypoint %s %s" % (octave, scale))
+#           
             newcnt = self._compact()        
             print("octave %i scale %i kp %i"%(octave, scale, newcnt))
+                            
+            x.append(scale)
+            y.append(newcnt)
+          
+              
             if newcnt:
                 result = numpy.empty((newcnt, 4), dtype=numpy.float32)
                 evt = pyopencl.enqueue_copy(self.queue, result, self.buffers["Kp_1"].data)
@@ -679,7 +690,10 @@ class SiftPlan(object):
 #                                                     *self.scales[octave + 1])
 #             if self.profile:
 #                 self.events.append(("shrink %s->%s" % (self.scales[octave], self.scales[octave + 1]), evt))
-
+#         pylab.figure(5)
+#         pylab.bar(x,y)
+#         pylab.show()
+#         pylab.ion()
         return results 
 
     def _compact(self, start=numpy.int32(0)):

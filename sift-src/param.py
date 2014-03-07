@@ -11,10 +11,10 @@ par = Enum(OctaveMax=100000,
 #             DoubleImSize=0,
             order=3,
             InitSigma = 0.5,
-            FinalSigma = 10.0,
+            FinalSigma = 2.0,
             CurSigma = 0.25, # flou de depart correspondant a l'independance de chaque pixel
             BorderDist = 5,
-            Scales = 32,
+            Scales = 3,
 #To detect an edge response, we require the ratio of smallest
 #to largest principle curvatures of the DOG function
 #(eigenvalues of the Hessian) to be below a threshold.  For
